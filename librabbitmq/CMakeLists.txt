@@ -113,7 +113,7 @@ set(RABBITMQ_SOURCES
     ${CMAKE_CURRENT_BINARY_DIR}/amqp_framing.c
     amqp_api.c  amqp.h 
     amqp_connection.c  amqp_mem.c  amqp_private.h  amqp_socket.c  amqp_table.c
-    amqp_url.c
+    amqp_url.c amqp-socket.h amqp-tcp-socket.c amqp-tcp-socket.h
     ${SOCKET_IMPL}/socket.h ${SOCKET_IMPL}/socket.c
     ${AMQP_SSL_SRCS}
 )

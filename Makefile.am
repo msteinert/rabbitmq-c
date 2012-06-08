@@ -3,6 +3,8 @@ ACLOCAL_AMFLAGS = -I m4
 lib_LTLIBRARIES = librabbitmq/librabbitmq.la
 
 librabbitmq_librabbitmq_la_SOURCES = \
+	librabbitmq/amqp-socket.h \
+	librabbitmq/amqp-tcp-socket.c \
 	librabbitmq/amqp_api.c \
 	librabbitmq/amqp_connection.c \
 	librabbitmq/amqp_framing.c \
@@ -51,11 +53,12 @@ librabbitmq_librabbitmq_la_CFLAGS += -I$(top_srcdir)/librabbitmq/win32/msinttype
 endif
 
 include_HEADERS = \
+	librabbitmq/amqp-tcp-socket.h \
 	librabbitmq/amqp.h \
 	librabbitmq/amqp_framing.h
 
 if SSL
-include_HEADERS += librabbitmq/amqp-ssl.h
+include_HEADERS += librabbitmq/amqp-ssl-socket.h
 endif
 
 BUILT_SOURCES = \
