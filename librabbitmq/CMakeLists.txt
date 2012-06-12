@@ -74,23 +74,23 @@ if (ENABLE_SSL_SUPPORT)
   add_definitions(-DWITH_SSL=1)
 
   if (SSL_ENGINE STREQUAL "OpenSSL")
-    set(AMQP_SSL_SRCS amqp-ssl.h amqp-openssl.c)
+    set(AMQP_SSL_SRCS amqp-ssl-socket.h amqp-openssl.c)
     include_directories(${OPENSSL_INCLUDE_DIR})
     set(AMQP_SSL_LIBS ${OPENSSL_LIBRARIES})
 
   elseif (SSL_ENGINE STREQUAL "cyaSSL")
-    set(AMQP_SSL_SRCS amqp-ssl.h amqp-cyassl.c)
+    set(AMQP_SSL_SRCS amqp-ssl-socket.h amqp-cyassl.c)
     include_directories(${CYASSL_INCLUDE_DIR})
     set(AMQP_SSL_LIBS ${CYASSL_LIBRARIES})
 
   elseif (SSL_ENGINE STREQUAL "GnuTLS")
-    set(AMQP_SSL_SRCS amqp-ssl.h amqp-gnutls.c)
+    set(AMQP_SSL_SRCS amqp-ssl-socket.h amqp-gnutls.c)
     include_directories(${GNUTLS_INCLUDE_DIR})
     add_definitions(${GNUTLS_DEFINITIONS})
     set(AMQP_SSL_LIBS ${GNUTLS_LIBRARIES})
 
   elseif (SSL_ENGINE STREQUAL "PolarSSL")
-    set(AMQP_SSL_SRCS amqp-ssl.h amqp-polarssl.c)
+    set(AMQP_SSL_SRCS amqp-ssl-socket.h amqp-polarssl.c)
     include_directories(${POLARSSL_INCLUDE_DIR})
     set(AMQP_SSL_LIBS ${POLARSSL_LIBRARIES})
 
@@ -111,7 +111,7 @@ endif()
 set(RABBITMQ_SOURCES
     ${CMAKE_CURRENT_BINARY_DIR}/amqp_framing.h
     ${CMAKE_CURRENT_BINARY_DIR}/amqp_framing.c
-    amqp_api.c  amqp.h 
+    amqp_api.c  amqp.h
     amqp_connection.c  amqp_mem.c  amqp_private.h  amqp_socket.c  amqp_table.c
     amqp_url.c amqp-socket.h amqp-tcp-socket.c amqp-tcp-socket.h
     ${SOCKET_IMPL}/socket.h ${SOCKET_IMPL}/socket.c
