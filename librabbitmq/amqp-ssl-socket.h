@@ -86,6 +86,18 @@ amqp_ssl_socket_set_verify(amqp_socket_t *self,
 			   amqp_boolean_t verify);
 
 /**
+ * Enable or disable blocking.
+ *
+ * \param [in,out] self An SSL/TLS socket object.
+ * \param [in] blocking Enable or disable blocking.
+ */
+AMQP_PUBLIC_FUNCTION
+void
+AMQP_CALL
+amqp_ssl_socket_set_blocking(amqp_socket_t *self,
+			     amqp_boolean_t blocking);
+
+/**
  * Sets whether rabbitmq-c initializes the underlying SSL library.
  *
  * For SSL libraries that require a one-time initialization across

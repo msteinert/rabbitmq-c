@@ -56,11 +56,13 @@ static pthread_mutex_t *amqp_openssl_lockarray = NULL;
 
 struct amqp_ssl_socket_t {
 	const struct amqp_socket_class_t *klass;
-	BIO *bio;
 	SSL_CTX *ctx;
+	BIO *bio;
+	SSL *ssl;
 	char *buffer;
 	size_t length;
 	amqp_boolean_t verify;
+	amqp_boolean_t blocking;
 };
 
 static ssize_t
@@ -71,21 +73,17 @@ amqp_ssl_socket_send(void *base,
 {
 	struct amqp_ssl_socket_t *self = (struct amqp_ssl_socket_t *)base;
 	ssize_t sent;
-	ERR_clear_error();
+	int error;
 	sent = BIO_write(self->bio, buf, len);
-	if (0 > sent) {
-		SSL *ssl;
-		int error;
-		BIO_get_ssl(self->bio, &ssl);
-		error = SSL_get_error(ssl, sent);
-		switch (error) {
-		case SSL_ERROR_NONE:
-		case SSL_ERROR_ZERO_RETURN:
-		case SSL_ERROR_WANT_READ:
-		case SSL_ERROR_WANT_WRITE:
-			sent = 0;
-			break;
-		}
+	error = SSL_get_error(self->ssl, sent);
+	switch (error) {
+	case SSL_ERROR_NONE:
+		break;
+	case SSL_ERROR_ZERO_RETURN:
+	case SSL_ERROR_WANT_READ:
+	case SSL_ERROR_WANT_WRITE:
+		sent = 0;
+		break;
 	}
 	return sent;
 }
@@ -131,19 +129,17 @@ amqp_ssl_socket_recv(void *base,
 {
 	struct amqp_ssl_socket_t *self = (struct amqp_ssl_socket_t *)base;
 	ssize_t received;
-	ERR_clear_error();
+	int error;
 	received = BIO_read(self->bio, buf, len);
-	if (0 > received) {
-		SSL *ssl;
-		int error;
-		BIO_get_ssl(self->bio, &ssl);
-		error = SSL_get_error(ssl, received);
-		switch (error) {
-		case SSL_ERROR_WANT_READ:
-		case SSL_ERROR_WANT_WRITE:
-			received = 0;
-			break;
-		}
+	error = SSL_get_error(self->ssl, received);
+	switch (error) {
+	case SSL_ERROR_NONE:
+		break;
+	case SSL_ERROR_ZERO_RETURN:
+	case SSL_ERROR_WANT_READ:
+	case SSL_ERROR_WANT_WRITE:
+		received = 0;
+		break;
 	}
 	return received;
 }
@@ -158,9 +154,7 @@ amqp_ssl_socket_verify(void *base, const char *host)
 	int pos, utf8_length;
 	X509_NAME *name;
 	X509 *peer;
-	SSL *ssl;
-	BIO_get_ssl(self->bio, &ssl);
-	peer = SSL_get_peer_certificate(ssl);
+	peer = SSL_get_peer_certificate(self->ssl);
 	if (!peer) {
 		return -1;
 	}
@@ -216,20 +210,19 @@ amqp_ssl_socket_open(void *base, const char *host, int port)
 	struct amqp_ssl_socket_t *self = (struct amqp_ssl_socket_t *)base;
 	long result;
 	int status;
-	SSL *ssl;
 	self->bio = BIO_new_ssl_connect(self->ctx);
 	if (!self->bio) {
 		return -1;
 	}
-	BIO_get_ssl(self->bio, &ssl);
-	SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+	BIO_get_ssl(self->bio, &self->ssl);
 	BIO_set_conn_hostname(self->bio, host);
 	BIO_set_conn_int_port(self->bio, &port);
 	status = BIO_do_connect(self->bio);
 	if (1 != status) {
+		ERR_print_errors_fp(stderr);
 		return -1;
 	}
-	result = SSL_get_verify_result(ssl);
+	result = SSL_get_verify_result(self->ssl);
 	if (X509_V_OK != result) {
 		return -1;
 	}
@@ -295,6 +288,7 @@ amqp_ssl_socket_new(void)
 	if (!self->ctx) {
 		goto error;
 	}
+	SSL_CTX_set_mode(self->ctx, SSL_MODE_AUTO_RETRY);
 	self->klass = &amqp_ssl_socket_class;
 	self->verify = 1;
 	return (amqp_socket_t *)self;
@@ -331,12 +325,13 @@ amqp_ssl_socket_set_key(amqp_socket_t *base,
 	}
 	self = (struct amqp_ssl_socket_t *)base;
 	if (key && cert) {
-		int status = SSL_CTX_use_PrivateKey_file(self->ctx, key,
-							 SSL_FILETYPE_PEM);
+		int status = SSL_use_PrivateKey_file(self->ssl, key,
+						     SSL_FILETYPE_PEM);
 		if (1 != status) {
 			return -1;
 		}
-		status = SSL_CTX_use_certificate_chain_file(self->ctx, cert);
+		status = SSL_use_certificate_file(self->ssl, cert,
+						  SSL_FILETYPE_PEM);
 		if (1 != status) {
 			return -1;
 		}
@@ -355,6 +350,34 @@ amqp_ssl_socket_set_verify(amqp_socket_t *base,
 	}
 	self = (struct amqp_ssl_socket_t *)base;
 	self->verify = verify;
+}
+
+int
+amqp_ssl_socket_set_blocking(amqp_socket_t *base,
+			     amqp_boolean_t blocking)
+{
+	struct amqp_ssl_socket_t *self;
+	int status = 0, error;
+	if (base->klass != &amqp_ssl_socket_class) {
+		amqp_abort("<%p> is not of type amqp_ssl_socket_t", base);
+	}
+	self = (struct amqp_ssl_socket_t *)base;
+	if (blocking) {
+		status = BIO_set_nbio(self->bio, 0L);
+		if (status) {
+			SSL_set_mode(self->ssl, SSL_MODE_AUTO_RETRY);
+			return 0;
+		}
+	} else {
+		status = BIO_set_nbio(self->bio, 0L);
+		if (status) {
+			SSL_set_mode(self->ssl,
+				     SSL_MODE_ENABLE_PARTIAL_WRITE |
+				     SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+			return 0;
+		}
+	}
+	return -1;
 }
 
 void
